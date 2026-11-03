@@ -11,6 +11,7 @@ import { nearestFrame } from '../pose/sequence';
 import type { SegmentResult } from '../pose/types';
 import { audioTrackOf, extensionFor, fixInfiniteDuration, pickMimeType, startRecording } from '../lib/recorder';
 import { dateStamp, downloadBlob } from '../lib/download';
+import { drawWatermark, preloadBrandLogo } from '../lib/watermark';
 import type { ScoreSession } from '../lib/session';
 
 type Layout = 'reels' | 'wide';
@@ -33,7 +34,8 @@ interface Props {
 
 function panels(layout: Layout): { ref: Rect; user: Rect } {
   if (layout === 'reels') {
-    return { ref: { x: 0, y: 420, w: 540, h: 960 }, user: { x: 540, y: 420, w: 540, h: 960 } };
+    // 위 15%(288px) 안전 영역 바로 아래부터 시작
+    return { ref: { x: 0, y: 300, w: 540, h: 960 }, user: { x: 540, y: 300, w: 540, h: 960 } };
   }
   return { ref: { x: 0, y: 0, w: 960, h: 1080 }, user: { x: 960, y: 0, w: 960, h: 1080 } };
 }
@@ -138,20 +140,23 @@ export function ComparisonPlayer({ session, segment, title, debug }: Props) {
       ctx.restore();
 
       // 라벨
-      const label = (text: string, r: Rect, color: string) => {
+      // 원본은 왼쪽 끝, 나는 오른쪽 끝 (가운데는 등급 표시 자리). 위 15% 안전 영역 안으로.
+      const label = (text: string, r: Rect, color: string, side: 'left' | 'right') => {
         ctx.font = '900 34px "Noto Sans KR", sans-serif';
         const w = ctx.measureText(text).width + 40;
+        const x = side === 'left' ? r.x + 20 : r.x + r.w - 20 - w;
+        const y = Math.max(r.y + 20, size.h * 0.15 + 12);
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.roundRect(r.x + 20, r.y + 20, w, 56, 28);
+        ctx.roundRect(x, y, w, 56, 28);
         ctx.fill();
         ctx.fillStyle = '#0b0b12';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(text, r.x + 40, r.y + 49);
+        ctx.fillText(text, x + 20, y + 29);
       };
-      label('원본', p.ref, REF_COLOR);
-      label('나', p.user, USER_COLOR);
+      label('원본', p.ref, REF_COLOR, 'left');
+      label('나', p.user, USER_COLOR, 'right');
 
       // 카운트 표시
       const c = countAt(t, result.bpm, result.offset);
@@ -160,20 +165,24 @@ export function ComparisonPlayer({ session, segment, title, debug }: Props) {
         ctx.textAlign = 'center';
         ctx.fillStyle = '#fff';
         ctx.font = '900 64px "Noto Sans KR", sans-serif';
-        ctx.fillText(title || 'AI 안무 채점', size.w / 2, 150);
+        ctx.fillText(title || 'AI 안무 채점', size.w / 2, 140);
         ctx.fillStyle = '#9a98b0';
         ctx.font = '700 36px "Noto Sans KR", sans-serif';
-        ctx.fillText(`총점 ${result.totalScore.toFixed(1)} · ${result.totalGrade}`, size.w / 2, 215);
+        ctx.fillText(`총점 ${result.totalScore.toFixed(1)} · ${result.totalGrade}`, size.w / 2, 205);
         if (seg) {
           ctx.fillStyle = GRADE_COLORS[seg.grade];
+          // 구간 등급: 두 패널 경계 위 (안전 영역 안)
           ctx.font = '96px "Black Han Sans", sans-serif';
-          ctx.fillText(seg.grade, size.w / 2, 350);
+          ctx.lineWidth = 10;
+          ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+          ctx.strokeText(seg.grade, size.w / 2, 420);
+          ctx.fillText(seg.grade, size.w / 2, 420);
           ctx.fillStyle = '#fff';
           ctx.font = '900 44px "Noto Sans KR", sans-serif';
-          ctx.fillText(`${seg.index + 1}번째 8카운트 · ${Math.round(seg.score)}점`, size.w / 2, 1480);
+          ctx.fillText(`${seg.index + 1}번째 8카운트 · ${Math.round(seg.score)}점`, size.w / 2, 1330);
           ctx.fillStyle = '#ffd23f';
           ctx.font = '900 40px "Noto Sans KR", sans-serif';
-          ctx.fillText(seg.comment, size.w / 2, 1550, size.w - 80);
+          ctx.fillText(seg.comment, size.w / 2, 1390, size.w - 80);
         }
         if (c) {
           for (let i = 1; i <= 8; i++) {
@@ -181,34 +190,45 @@ export function ComparisonPlayer({ session, segment, title, debug }: Props) {
             const active = i === c.count;
             ctx.fillStyle = active ? '#ff3d81' : 'rgba(255,255,255,0.12)';
             ctx.beginPath();
-            ctx.arc(x, 1680, active ? 34 : 26, 0, Math.PI * 2);
+            ctx.arc(x, 1445, active ? 34 : 26, 0, Math.PI * 2);
             ctx.fill();
             ctx.fillStyle = active ? '#fff' : '#6f6d85';
             ctx.font = `900 ${active ? 38 : 28}px "Noto Sans KR", sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(String(i), x, 1682);
+            ctx.fillText(String(i), x, 1447);
           }
         }
         ctx.textBaseline = 'alphabetic';
-        ctx.fillStyle = '#4d4b63';
-        ctx.font = '700 28px "Noto Sans KR", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('dance-score · AI 안무 채점기', size.w / 2, 1860);
       } else if (seg) {
+        // 가로: 등급/카운트를 위쪽 안전 영역 안으로 (아래는 워터마크)
         ctx.textAlign = 'center';
-        ctx.fillStyle = GRADE_COLORS[seg.grade];
-        ctx.font = '90px "Black Han Sans", sans-serif';
-        ctx.fillText(seg.grade, size.w / 2, 1040);
         if (c) {
           ctx.fillStyle = '#fff';
           ctx.font = '900 48px "Noto Sans KR", sans-serif';
-          ctx.fillText(`${c.count} / 8`, size.w / 2, 80);
+          ctx.lineWidth = 8;
+          ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+          ctx.strokeText(`${c.count} / 8`, size.w / 2, 230);
+          ctx.fillText(`${c.count} / 8`, size.w / 2, 230);
         }
+        ctx.fillStyle = GRADE_COLORS[seg.grade];
+        ctx.font = '90px "Black Han Sans", sans-serif';
+        ctx.lineWidth = 10;
+        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        ctx.strokeText(seg.grade, size.w / 2, 330);
+        ctx.fillText(seg.grade, size.w / 2, 330);
       }
+
+      // 워터마크: 하단 15% 안전 영역 바로 위 (항상 표시, 녹화본에도 그대로 들어감)
+      drawWatermark(ctx, size.w, size.h);
     },
     [ref, user, result, hasVideo, session.mirror, session.userUrl, title],
   );
+
+  // 이미지 로고를 쓰는 브랜드면 미리 로드
+  useEffect(() => {
+    void preloadBrandLogo().then(() => draw(st.current.clockT));
+  }, [draw]);
 
   // 영상 로드
   useEffect(() => {

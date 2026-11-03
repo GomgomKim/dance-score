@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { setMuted } from './audio/sfx';
+import { BRAND, footerParts } from './config/brand';
 import { AnalyzingScreen } from './components/AnalyzingScreen';
 import { LiveScreen } from './components/LiveScreen';
 import { ResultScreen } from './components/ResultScreen';
@@ -88,9 +89,16 @@ export function App() {
       <div className="frame">
         <header className="header debug">
           <div className="logo" onClick={() => setScreen('setup')} role="button" tabIndex={0}>
-            <span className="logo-mark">8</span>
+            {BRAND.logo.src ? (
+              <img className="logo-mark" src={BRAND.logo.src} alt="" />
+            ) : (
+              <span className="logo-mark" style={{ background: BRAND.logo.background, color: BRAND.logo.color }}>
+                {BRAND.logo.mark}
+              </span>
+            )}
             <span>
-              dance<b>score</b>
+              {BRAND.appName.prefix}
+              <b style={{ color: BRAND.accent }}>{BRAND.appName.accent}</b>
             </span>
           </div>
           {screen === 'setup' && (
@@ -167,7 +175,22 @@ export function App() {
             />
           )}
         </main>
+
+        <Footer />
       </div>
     </div>
+  );
+}
+
+function Footer() {
+  const [before, handle, after] = footerParts();
+  return (
+    <footer className="footer">
+      {before}
+      <a href={BRAND.profileUrl} target="_blank" rel="noopener noreferrer" style={{ color: BRAND.accent }}>
+        {handle}
+      </a>
+      {after}
+    </footer>
   );
 }

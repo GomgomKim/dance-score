@@ -3,6 +3,7 @@ import { GRADE_COLORS } from '../pose/grading';
 import { PART_LABELS } from '../pose/similarity';
 import type { AnalysisResult } from '../pose/types';
 import { formatDate } from './download';
+import { drawWatermark, preloadBrandLogo } from './watermark';
 
 export const CARD_W = 1080;
 export const CARD_H = 1920;
@@ -16,6 +17,7 @@ export async function ensureFonts() {
     document.fonts.load(`200px ${FONT_DISPLAY}`, '0123456789점'),
     document.fonts.load(`900 40px ${FONT_BODY}`, '가나다'),
     document.fonts.load(`700 40px ${FONT_BODY}`, '가나다'),
+    preloadBrandLogo(),
   ]);
 }
 
@@ -74,7 +76,7 @@ export function drawResultCard(canvas: HTMLCanvasElement, result: AnalysisResult
   ctx.fillText(opts.title || '제목 없는 안무', CARD_W / 2, 300);
   ctx.fillStyle = '#9a98b0';
   ctx.font = `700 34px ${FONT_BODY}`;
-  ctx.fillText(`${formatDate(result.createdAt)}${opts.handle ? `  ·  ${opts.handle}` : ''}`, CARD_W / 2, 360);
+  ctx.fillText(`${formatDate(result.createdAt)}${opts.handle ? `  ·  ${opts.handle}` : ''}`, CARD_W / 2, 352);
 
   // 총점
   const tenths = Math.round(result.totalScore * 10);
@@ -91,18 +93,18 @@ export function drawResultCard(canvas: HTMLCanvasElement, result: AnalysisResult
   const startX = CARD_W / 2 - (wholeW + decW) / 2;
   ctx.textAlign = 'left';
   ctx.font = `360px ${FONT_DISPLAY}`;
-  ctx.fillText(String(whole), startX, 800);
+  ctx.fillText(String(whole), startX, 700);
   ctx.font = `120px ${FONT_DISPLAY}`;
-  ctx.fillText(decStr, startX + wholeW, 800);
+  ctx.fillText(decStr, startX + wholeW, 700);
   ctx.shadowBlur = 0;
   ctx.textAlign = 'center';
 
   // 등급
-  ctx.font = `150px ${FONT_DISPLAY}`;
+  ctx.font = `130px ${FONT_DISPLAY}`;
   ctx.fillStyle = gradeColor;
   ctx.shadowColor = gradeColor;
   ctx.shadowBlur = 40;
-  ctx.fillText(result.totalGrade, CARD_W / 2, 990);
+  ctx.fillText(result.totalGrade, CARD_W / 2, 850);
   ctx.shadowBlur = 0;
 
   // 서브 점수
@@ -114,23 +116,31 @@ export function drawResultCard(canvas: HTMLCanvasElement, result: AnalysisResult
   sub.forEach(([label, value], i) => {
     const cx = CARD_W / 2 + (i - 1) * 300;
     ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    roundRect(ctx, cx - 130, 1050, 260, 140, 28);
+    roundRect(ctx, cx - 130, 890, 260, 120, 28);
     ctx.fill();
     ctx.fillStyle = '#9a98b0';
-    ctx.font = `700 30px ${FONT_BODY}`;
-    ctx.fillText(label, cx, 1100);
+    ctx.font = `700 28px ${FONT_BODY}`;
+    ctx.fillText(label, cx, 932);
     ctx.fillStyle = '#fff';
-    ctx.font = `64px ${FONT_DISPLAY}`;
-    ctx.fillText(i === 2 ? `${value}개` : String(Math.round(value)), cx, 1170);
+    ctx.font = `56px ${FONT_DISPLAY}`;
+    ctx.fillText(i === 2 ? `${value}개` : String(Math.round(value)), cx, 992);
   });
+
+  // 코멘트
+  ctx.fillStyle = '#ff3d81';
+  ctx.font = `900 34px ${FONT_BODY}`;
+  ctx.fillText(`가장 많이 틀린 부위 · ${PART_LABELS[result.worstPart]}`, CARD_W / 2, 1068);
+  ctx.fillStyle = '#fff';
+  fitText(ctx, `“${result.comment}”`, CARD_W - 140, 48, '900', FONT_BODY);
+  ctx.fillText(`“${result.comment}”`, CARD_W / 2, 1124);
 
   // 8카운트 막대 그래프
   const chartX = 90;
-  const chartY = 1260;
+  const chartY = 1195;
   const chartW = CARD_W - 180;
-  const chartH = 300;
+  const chartH = 240;
   ctx.fillStyle = 'rgba(255,255,255,0.04)';
-  roundRect(ctx, chartX - 30, chartY - 40, chartW + 60, chartH + 110, 32);
+  roundRect(ctx, chartX - 30, chartY - 45, chartW + 60, chartH + 90, 32);
   ctx.fill();
   ctx.textAlign = 'left';
   ctx.fillStyle = '#9a98b0';
@@ -140,8 +150,8 @@ export function drawResultCard(canvas: HTMLCanvasElement, result: AnalysisResult
   const n = Math.max(1, segs.length);
   const gap = Math.min(16, (chartW / n) * 0.2);
   const bw = (chartW - gap * (n - 1)) / n;
-  const top = chartY + 30;
-  const barArea = chartH - 50;
+  const top = chartY + 22;
+  const barArea = chartH - 60;
   segs.forEach((s, i) => {
     const h = Math.max(6, (s.score / 100) * barArea);
     const x = chartX + i * (bw + gap);
@@ -154,23 +164,13 @@ export function drawResultCard(canvas: HTMLCanvasElement, result: AnalysisResult
       ctx.textAlign = 'center';
       ctx.fillStyle = '#6f6d85';
       ctx.font = `700 ${Math.min(26, bw * 0.45)}px ${FONT_BODY}`;
-      ctx.fillText(String(i + 1), x + bw / 2, top + barArea + 36);
+      ctx.fillText(String(i + 1), x + bw / 2, top + barArea + 32);
     }
   });
   ctx.textAlign = 'center';
 
-  // 코멘트
-  ctx.fillStyle = '#ff3d81';
-  ctx.font = `900 34px ${FONT_BODY}`;
-  ctx.fillText(`가장 많이 틀린 부위 · ${PART_LABELS[result.worstPart]}`, CARD_W / 2, 1690);
-  ctx.fillStyle = '#fff';
-  fitText(ctx, `“${result.comment}”`, CARD_W - 140, 52, '900', FONT_BODY);
-  ctx.fillText(`“${result.comment}”`, CARD_W / 2, 1765);
-
-  // 브랜딩
-  ctx.fillStyle = '#4d4b63';
-  ctx.font = `700 28px ${FONT_BODY}`;
-  ctx.fillText('dance-score · AI 안무 채점기', CARD_W / 2, 1860);
+  // 워터마크: 하단 15% 안전 영역 바로 위 (항상 표시)
+  drawWatermark(ctx, CARD_W, CARD_H);
 }
 
 export function canvasToBlob(canvas: HTMLCanvasElement, type = 'image/png'): Promise<Blob> {

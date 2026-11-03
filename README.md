@@ -47,6 +47,29 @@ npm run preview    # 빌드 결과 확인
 - **🎥 녹화 모드** (또는 `H` 키): 설정/디버그 UI를 숨김. 오른쪽 위 구석에 거의 투명한 "UI 보이기" 버튼으로 복귀
 - **음소거** 토글: 효과음 끄기 (편집할 때 따로 음악 깔고 싶을 때)
 
+### 워터마크 / 브랜드 바꾸기
+
+결과 카드와 비교 영상에는 항상 워터마크가 들어갑니다 (끄는 옵션 없음).
+9:16 기준 위아래 15%(릴스 UI에 가려지는 영역)를 피해서, 하단 안전 영역 경계 바로 위에 들어가요.
+
+문구, 핸들, 주소, 로고, 웹 화면 하단 "made by" 링크는 전부 **`src/config/brand.ts` 한 파일**에서 관리합니다.
+다른 브랜드용으로 쓰려면 이 파일만 바꾸면 돼요.
+
+```ts
+export const BRAND: BrandConfig = {
+  appName: { prefix: 'dance', accent: 'score' },   // 헤더 로고 옆 이름
+  handle: '@gomgom_kim',                             // 워터마크 1줄, 푸터
+  profileUrl: 'https://www.instagram.com/gomgom_kim/',
+  ctaText: '나도 채점받기',                          // 워터마크 2줄: "{ctaText} {사이트 주소}"
+  siteUrl: 'https://dance-score.vercel.app',         // 워터마크에는 https:// 없이 표시
+  footerText: 'made by {handle}',
+  logo: { mark: '8', background: '#ff3d81', color: '#ffffff' }, // 이미지 로고는 src: '/logo.png' (public/에 넣기)
+  accent: '#ff3d81',
+};
+```
+
+브라우저 탭 아이콘은 `public/favicon.svg` 파일이라 따로 바꿔야 합니다.
+
 ---
 
 ## 채점 방식 (릴스 댓글 질문 대비용)
@@ -138,7 +161,8 @@ src/
     decode.ts          파일 → 오디오 샘플
     sfx.ts             Web Audio 합성 효과음 (음원 파일 없음)
   components/          화면들 (Setup / Analyzing / Live / Result …)
-  lib/                 결과 카드 렌더링, MediaRecorder, 다운로드
+  config/brand.ts      브랜드 설정 (워터마크 문구, 핸들, 주소, 로고)
+  lib/                 결과 카드 렌더링, 워터마크, MediaRecorder, 다운로드
   demo/                데모 모드 세션
 ```
 
