@@ -3,14 +3,16 @@ import { useEffect, useRef, useState } from 'react';
 import type { AnalysisResult } from '../pose/types';
 import { canvasToBlob, drawResultCard, ensureFonts } from '../lib/resultCard';
 import { dateStamp, shareOrDownload } from '../lib/download';
+import type { ChallengeInfo } from '../lib/session';
 
 interface Props {
   result: AnalysisResult;
   title: string;
   onTitleChange: (t: string) => void;
+  challenge?: ChallengeInfo;
 }
 
-export function ResultCardPanel({ result, title, onTitleChange }: Props) {
+export function ResultCardPanel({ result, title, onTitleChange, challenge }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [handle, setHandle] = useState(() => {
     try {
@@ -23,17 +25,17 @@ export function ResultCardPanel({ result, title, onTitleChange }: Props) {
   useEffect(() => {
     let cancelled = false;
     void ensureFonts().then(() => {
-      if (!cancelled && canvasRef.current) drawResultCard(canvasRef.current, result, { title, handle });
+      if (!cancelled && canvasRef.current) drawResultCard(canvasRef.current, result, { title, handle, challenge });
     });
     return () => {
       cancelled = true;
     };
-  }, [result, title, handle]);
+  }, [result, title, handle, challenge]);
 
   async function save() {
     const canvas = canvasRef.current!;
     await ensureFonts();
-    drawResultCard(canvas, result, { title, handle });
+    drawResultCard(canvas, result, { title, handle, challenge });
     const blob = await canvasToBlob(canvas);
     await shareOrDownload(blob, `dance-score-${dateStamp()}.png`);
   }
@@ -42,10 +44,14 @@ export function ResultCardPanel({ result, title, onTitleChange }: Props) {
     <div className="card-panel">
       <canvas ref={canvasRef} className="card-preview" />
       <div className="card-form">
-        <label className="field">
-          <span>곡 제목</span>
-          <input value={title} onChange={(e) => onTitleChange(e.target.value)} placeholder="예: 뉴진스 - Supernatural" />
-        </label>
+        {challenge ? (
+          <p className="hint accent">챌린지 이름과 "나도 도전하기" 링크가 카드에 들어가요.</p>
+        ) : (
+          <label className="field">
+            <span>곡 제목</span>
+            <input value={title} onChange={(e) => onTitleChange(e.target.value)} placeholder="예: 뉴진스 - Supernatural" />
+          </label>
+        )}
         <label className="field">
           <span>닉네임 (선택)</span>
           <input

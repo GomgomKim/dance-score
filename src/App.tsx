@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { setMuted } from './audio/sfx';
 import { BRAND, footerParts } from './config/brand';
+import { AdminPage } from './components/AdminPage';
 import { AnalyzingScreen } from './components/AnalyzingScreen';
+import { ChallengePage } from './components/ChallengePage';
 import { LiveScreen } from './components/LiveScreen';
 import { ResultScreen } from './components/ResultScreen';
 import { SetupScreen, type Mode } from './components/SetupScreen';
 import { createDemoSession } from './demo/demoSession';
 import { DEFAULT_SETUP, type SetupState } from './lib/setup';
 import type { ScoreSession } from './lib/session';
+import { parseRoute } from './lib/route';
 import { useObjectUrl } from './lib/useObjectUrl';
 
 type Screen = 'setup' | 'analyzing' | 'live' | 'result';
@@ -36,6 +39,7 @@ function usePref(key: string, initial: boolean): [boolean, (v: boolean) => void]
 }
 
 export function App() {
+  const [route] = useState(() => parseRoute(location.pathname));
   const [mode, setMode] = useState<Mode>('analysis');
   const [screen, setScreen] = useState<Screen>(() =>
     new URLSearchParams(location.search).has('demo') ? 'result' : 'setup',
@@ -88,7 +92,12 @@ export function App() {
     <div className={`app ${portrait ? 'portrait' : ''} ${recMode ? 'rec' : ''}`}>
       <div className="frame">
         <header className="header debug">
-          <div className="logo" onClick={() => setScreen('setup')} role="button" tabIndex={0}>
+          <div
+            className="logo"
+            onClick={() => (route.name === 'home' ? setScreen('setup') : location.assign('/'))}
+            role="button"
+            tabIndex={0}
+          >
             {BRAND.logo.src ? (
               <img className="logo-mark" src={BRAND.logo.src} alt="" />
             ) : (
@@ -101,7 +110,7 @@ export function App() {
               <b style={{ color: BRAND.accent }}>{BRAND.appName.accent}</b>
             </span>
           </div>
-          {screen === 'setup' && (
+          {route.name === 'home' && screen === 'setup' && (
             <nav className="tabs">
               <button className={mode === 'analysis' ? 'on' : ''} onClick={() => setMode('analysis')}>
                 분석 모드
@@ -131,7 +140,9 @@ export function App() {
         )}
 
         <main>
-          {screen === 'setup' && (
+          {route.name === 'challenge' && <ChallengePage id={route.id} debug={debug} />}
+          {route.name === 'admin' && <AdminPage />}
+          {route.name === 'home' && screen === 'setup' && (
             <SetupScreen
               mode={mode}
               setup={setup}
@@ -145,7 +156,7 @@ export function App() {
               onDemo={() => showResult(createDemoSession())}
             />
           )}
-          {screen === 'analyzing' && runSetup && refUrl && userUrl && (
+          {route.name === 'home' && screen === 'analyzing' && runSetup && refUrl && userUrl && (
             <AnalyzingScreen
               setup={runSetup}
               refUrl={refUrl}
@@ -154,7 +165,7 @@ export function App() {
               onCancel={() => setScreen('setup')}
             />
           )}
-          {screen === 'live' && runSetup && refUrl && (
+          {route.name === 'home' && screen === 'live' && runSetup && refUrl && (
             <LiveScreen
               setup={runSetup}
               refUrl={refUrl}
@@ -163,7 +174,7 @@ export function App() {
               debug={debug}
             />
           )}
-          {screen === 'result' && session && (
+          {route.name === 'home' && screen === 'result' && session && (
             <ResultScreen
               key={session.result.createdAt}
               session={session}

@@ -165,7 +165,7 @@ export function ComparisonPlayer({ session, segment, title, debug }: Props) {
         ctx.textAlign = 'center';
         ctx.fillStyle = '#fff';
         ctx.font = '900 64px "Noto Sans KR", sans-serif';
-        ctx.fillText(title || 'AI 안무 채점', size.w / 2, 140);
+        ctx.fillText(session.challenge ? `${session.challenge.title} 챌린지` : title || 'AI 안무 채점', size.w / 2, 140);
         ctx.fillStyle = '#9a98b0';
         ctx.font = '700 36px "Noto Sans KR", sans-serif';
         ctx.fillText(`총점 ${result.totalScore.toFixed(1)} · ${result.totalGrade}`, size.w / 2, 205);
@@ -220,9 +220,9 @@ export function ComparisonPlayer({ session, segment, title, debug }: Props) {
       }
 
       // 워터마크: 하단 15% 안전 영역 바로 위 (항상 표시, 녹화본에도 그대로 들어감)
-      drawWatermark(ctx, size.w, size.h);
+      drawWatermark(ctx, size.w, size.h, session.challenge?.id);
     },
-    [ref, user, result, hasVideo, session.mirror, session.userUrl, title],
+    [ref, user, result, hasVideo, session.mirror, session.userUrl, title, session.challenge?.id],
   );
 
   // 이미지 로고를 쓰는 브랜드면 미리 로드

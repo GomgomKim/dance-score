@@ -29,6 +29,7 @@ export function watermarkLayout(
   height: number,
   textWidth: (text: string, size: number, bold: boolean) => number,
   brand: BrandConfig = BRAND,
+  challengeId?: string,
 ): WatermarkLayout {
   const unit = Math.min(width, height);
   // 점수(카드 기준 360px)보다 훨씬 작지만 폰에서 또렷하게 읽히는 크기
@@ -38,7 +39,7 @@ export function watermarkLayout(
   const padX = Math.round(unit * 0.03);
   const padY = Math.round(unit * 0.016);
   const gap = Math.round(unit * 0.018);
-  const [line1, line2] = watermarkLines(brand);
+  const [line1, line2] = watermarkLines(brand, challengeId);
   const textW = Math.max(textWidth(line1, handleSize, true), textWidth(line2, ctaSize, false));
   const w = Math.min(width * 0.9, padX * 2 + logoSize + gap + textW);
   const h = padY * 2 + Math.max(logoSize, handleSize * 1.25 + ctaSize * 1.3);
@@ -94,14 +95,20 @@ function drawLogo(ctx: CanvasRenderingContext2D, x: number, y: number, size: num
   ctx.fillText(brand.logo.mark, x + size / 2, y + size * 0.54);
 }
 
-/** 캔버스 하단 안전 영역 위에 워터마크를 그린다 */
-export function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: number, brand: BrandConfig = BRAND) {
+/** 캔버스 하단 안전 영역 위에 워터마크를 그린다. challengeId가 있으면 "나도 도전하기" 링크 */
+export function drawWatermark(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  challengeId?: string,
+  brand: BrandConfig = BRAND,
+) {
   const measure = (text: string, size: number, bold: boolean) => {
     ctx.font = `${bold ? 900 : 700} ${size}px ${FONT}`;
     return ctx.measureText(text).width;
   };
-  const L = watermarkLayout(width, height, measure, brand);
-  const [line1, line2] = watermarkLines(brand);
+  const L = watermarkLayout(width, height, measure, brand, challengeId);
+  const [line1, line2] = watermarkLines(brand, challengeId);
   ctx.save();
   ctx.shadowBlur = 0;
   // 영상 위에서도 읽히도록 반투명 어두운 배경

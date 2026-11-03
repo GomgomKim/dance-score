@@ -11,6 +11,8 @@ export interface BrandConfig {
   profileUrl: string;
   /** 워터마크 2줄 앞부분 문구. 뒤에 사이트 주소가 붙는다 */
   ctaText: string;
+  /** 챌린지 결과일 때 워터마크 2줄 문구. 뒤에 챌린지 주소가 붙는다 */
+  challengeCtaText: string;
   /** 사이트 주소. 워터마크에는 https:// 없이 표시 */
   siteUrl: string;
   /** 웹 화면 하단 문구. {handle} 자리에 핸들이 들어간다 */
@@ -32,6 +34,7 @@ export const BRAND: BrandConfig = {
   handle: '@gomgom_kim',
   profileUrl: 'https://www.instagram.com/gomgom_kim/',
   ctaText: '나도 채점받기',
+  challengeCtaText: '나도 도전하기',
   siteUrl: 'https://dance-score.vercel.app',
   footerText: 'made by {handle}',
   logo: {
@@ -47,8 +50,14 @@ export function displayUrl(url: string): string {
   return url.replace(/^https?:\/\//, '').replace(/\/+$/, '');
 }
 
-/** 워터마크 두 줄 */
-export function watermarkLines(brand: BrandConfig = BRAND): [string, string] {
+/** 챌린지 공유 주소 (https:// 포함) */
+export function challengeLink(challengeId: string, brand: BrandConfig = BRAND): string {
+  return `${brand.siteUrl.replace(/\/+$/, '')}/c/${challengeId}`;
+}
+
+/** 워터마크 두 줄. 챌린지 결과면 2줄이 "나도 도전하기 {챌린지 주소}" */
+export function watermarkLines(brand: BrandConfig = BRAND, challengeId?: string): [string, string] {
+  if (challengeId) return [brand.handle, `${brand.challengeCtaText} ${displayUrl(challengeLink(challengeId, brand))}`];
   return [brand.handle, `${brand.ctaText} ${displayUrl(brand.siteUrl)}`];
 }
 
