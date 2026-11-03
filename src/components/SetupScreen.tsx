@@ -153,6 +153,9 @@ export function SetupScreen({ mode, setup, update, refUrl, userUrl, onStart, onD
         >
           데모 결과 보기
         </button>
+        <a className="btn ghost" href="/c/sample">
+          🔥 샘플 챌린지
+        </a>
       </div>
     </div>
   );

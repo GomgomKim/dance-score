@@ -41,6 +41,57 @@ npm run preview    # 빌드 결과 확인
    - 🎬 나란히 비교 영상 녹화 & 다운로드 (세로 9:16 릴스용 / 가로 16:9, 구간만 / 전체)
    - 📸 9:16 결과 카드 이미지 저장 (곡 제목, 닉네임, 날짜, 총점, 등급, 그래프)
 
+## 챌린지 링크 (`/c/챌린지ID`)
+
+원본 안무 영상을 사이트에 올리지 않고 "이 안무 도전해봐" 링크를 만들 수 있어요.
+
+- 원본은 **유튜브 임베드**(IFrame Player API)로 재생
+- 채점은 관리자가 **미리 뽑아둔 포즈 JSON**(`public/challenges/<id>.json`)으로
+- 도전자는 웹캠만 켜면 끝. 8카운트마다 등급 팝업, 끝나면 결과 화면
+- 결과 카드와 비교 영상 워터마크에 챌린지 이름 + **"나도 도전하기 {챌린지 주소}"** 가 들어감
+
+샘플: [`/c/sample`](https://dance-score.vercel.app/c/sample). 가짜 포즈 데이터라 유튜브 없이 **원본 스켈레톤 + 메트로놈**으로 재생돼요.
+유튜브 싱크를 시험해보려면 `/c/sample?yt=<유튜브 영상 ID>&ytOffset=<초>` (포즈는 가짜라 점수는 의미 없음).
+
+### 챌린지 만드는 법
+
+1. **`/admin`** 접속 (로컬 `npm run dev` 추천. 배포된 사이트에서도 영상은 업로드되지 않음)
+2. 원본 안무 영상 파일 선택 → 거울 모드면 좌우 반전
+3. BPM, 첫 카운트 위치 맞추기 (분석 모드와 같은 도구)
+4. 챌린지 이름, ID(주소), 아티스트, 유튜브 주소 입력
+   - **유튜브 오프셋**: 유튜브 영상이 내 파일보다 인트로가 길면 + (유튜브 시간 = 파일 시간 + 오프셋). 미리보기에서 그 시간에 "1"이 나오는지 확인
+5. **포즈 추출** → **▶ 바로 테스트해보기**로 배포 전에 확인 → **JSON 다운로드**
+6. 파일을 `public/challenges/<id>.json`에 넣고 커밋 → main에 푸시하면 Vercel이 배포 → `/c/<id>` 공유
+
+샘플 파일을 다시 만들려면 `npm run sample:challenge`.
+
+### 유튜브 ↔ 웹캠 싱크
+
+유튜브 IFrame API의 `getCurrentTime()`은 띄엄띄엄(약 0.1~0.25초마다) 갱신돼서 그대로 쓰면 시간이 계단처럼 튀어요.
+마지막 값 + 실제 경과 시간으로 보간하고, 새 값이 오면 부드럽게 보정하는 시계(`src/challenge/clock.ts`)로 원본 시간을 추정하고,
+웹캠 프레임을 그 시간에 맞춰 기록합니다. 웹캠 지연이 큰 기기는 챌린지 화면의 **싱크 보정** 슬라이더로 맞출 수 있어요
+(점수가 늘 "늦어요"로 나오면 + 쪽으로).
+
+### 챌린지 JSON 포맷
+
+```jsonc
+{
+  "version": 1,
+  "id": "super-shy",            // 주소 /c/super-shy (영문 소문자, 숫자, -)
+  "title": "Super Shy",
+  "artist": "NewJeans",          // 선택
+  "youtubeId": "xxxxxxxxxxx",    // null이면 스켈레톤 가이드
+  "youtubeOffset": 0,            // 유튜브 시간 = 포즈 시간 + 오프셋
+  "bpm": 150, "offset": 1.2,     // 첫 카운트 위치(초)
+  "mirror": false,               // 원본을 반전해서 분석했는지 (포즈는 반전된 상태로 저장)
+  "duration": 32.5,
+  "poses": { "fps": 15, "aspect": 0.5625, "start": 0,
+             "data": [[x, y, visibility, ... × 33] | null, ...] }  // 0.001 단위 정수
+}
+```
+
+1분짜리 안무, 15fps 기준 JSON은 약 0.4MB예요.
+
 ### 촬영용 기능
 
 - 헤더의 **9:16** 토글: 화면 전체를 세로 레이아웃으로 (PC 화면을 그대로 화면 녹화할 때)
@@ -160,7 +211,9 @@ src/
     tempo.ts           탭 템포, BPM 자동 추정, 오디오 싱크 (순수 함수)
     decode.ts          파일 → 오디오 샘플
     sfx.ts             Web Audio 합성 효과음 (음원 파일 없음)
-  components/          화면들 (Setup / Analyzing / Live / Result …)
+  challenge/           챌린지 JSON 포맷, 유튜브 플레이어, 미디어 시계, 샘플 생성기
+  live/                실시간 채점기(LiveScorer, 라이브/챌린지 공용), 팝업 UI
+  components/          화면들 (Setup / Analyzing / Live / Result / ChallengePage / AdminPage …)
   config/brand.ts      브랜드 설정 (워터마크 문구, 핸들, 주소, 로고)
   lib/                 결과 카드 렌더링, 워터마크, MediaRecorder, 다운로드
   demo/                데모 모드 세션

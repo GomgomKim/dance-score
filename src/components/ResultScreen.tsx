@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { challengeLink } from '../config/brand';
 import { GRADE_COLORS } from '../pose/grading';
 import { PART_LABELS } from '../pose/similarity';
 import type { ScoreSession } from '../lib/session';
@@ -13,11 +14,31 @@ interface Props {
   onTitleChange: (t: string) => void;
   onBack: () => void;
   onRegenerateDemo?: () => void;
+  /** "처음으로" 버튼 문구 (챌린지면 "다시 도전") */
+  backLabel?: string;
   debug: boolean;
 }
 
-export function ResultScreen({ session, title, onTitleChange, onBack, onRegenerateDemo, debug }: Props) {
-  const { result } = session;
+export function ResultScreen({ session, title, onTitleChange, onBack, onRegenerateDemo, backLabel, debug }: Props) {
+  const { result, challenge } = session;
+  const [copied, setCopied] = useState(false);
+
+  async function copyChallengeLink() {
+    if (!challenge) return;
+    const url = challengeLink(challenge.id);
+    const text = `${challenge.title} 챌린지 나도 도전하기 👉 ${url}`;
+    try {
+      if (navigator.share && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+        await navigator.share({ title: `${challenge.title} 챌린지`, text, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt('챌린지 링크', url);
+    }
+  }
   const [replayKey, setReplayKey] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [selected, setSelected] = useState<number | null>(result.worstSegmentIndex >= 0 ? result.worstSegmentIndex : null);
@@ -41,7 +62,11 @@ export function ResultScreen({ session, title, onTitleChange, onBack, onRegenera
   return (
     <div className="screen result">
       <section className="panel reveal-panel">
-        {title && <div className="song-title">{title}</div>}
+        {challenge ? (
+          <div className="song-title">🔥 {challenge.title} 챌린지</div>
+        ) : (
+          title && <div className="song-title">{title}</div>
+        )}
         <ScoreReveal
           score={result.totalScore}
           grade={result.totalGrade}
@@ -66,6 +91,16 @@ export function ResultScreen({ session, title, onTitleChange, onBack, onRegenera
           <div className="worst-label">가장 많이 틀린 부위 · {PART_LABELS[result.worstPart]}</div>
           <div className="worst-text">“{result.comment}”</div>
         </div>
+        {challenge && (
+          <div className="row center">
+            <button className="btn primary" onClick={() => void copyChallengeLink()}>
+              {copied ? '✓ 복사됐어요' : '🔗 챌린지 링크 공유'}
+            </button>
+            <button className="btn ghost" onClick={onBack}>
+              {backLabel ?? '다시 도전'}
+            </button>
+          </div>
+        )}
         <div className="row debug">
           <button
             className="btn ghost"
@@ -121,12 +156,12 @@ export function ResultScreen({ session, title, onTitleChange, onBack, onRegenera
 
       <section className="panel">
         <h3>결과 카드</h3>
-        <ResultCardPanel result={result} title={title} onTitleChange={onTitleChange} />
+        <ResultCardPanel result={result} title={title} onTitleChange={onTitleChange} challenge={challenge} />
       </section>
 
       <div className="row center debug">
         <button className="btn ghost" onClick={onBack}>
-          ← 처음으로
+          ← {backLabel ?? '처음으로'}
         </button>
       </div>
     </div>

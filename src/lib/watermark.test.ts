@@ -16,6 +16,15 @@ describe('brand config', () => {
   it('푸터 문구', () => {
     expect(footerParts()).toEqual(['made by ', '@gomgom_kim', '']);
   });
+  it('챌린지 결과면 "나도 도전하기 {챌린지 주소}"', () => {
+    expect(watermarkLines(BRAND, 'super-shy')).toEqual(['@gomgom_kim', '나도 도전하기 dance-score.vercel.app/c/super-shy']);
+  });
+  it('챌린지 워터마크도 안전 영역 안', () => {
+    const L = watermarkLayout(1080, 1920, approx, BRAND, 'a-very-long-challenge-name-for-testing');
+    expect(L.y + L.h).toBeLessThanOrEqual(1920 * (1 - SAFE_MARGIN_RATIO));
+    expect(L.x).toBeGreaterThanOrEqual(0);
+    expect(L.x + L.w).toBeLessThanOrEqual(1080);
+  });
   it('다른 브랜드로 바꿔 끼우기', () => {
     const other = { ...BRAND, handle: '@other', ctaText: 'Try it', siteUrl: 'https://other.app' };
     expect(watermarkLines(other)).toEqual(['@other', 'Try it other.app']);

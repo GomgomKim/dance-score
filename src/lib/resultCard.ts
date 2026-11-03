@@ -3,6 +3,7 @@ import { GRADE_COLORS } from '../pose/grading';
 import { PART_LABELS } from '../pose/similarity';
 import type { AnalysisResult } from '../pose/types';
 import { formatDate } from './download';
+import type { ChallengeInfo } from './session';
 import { drawWatermark, preloadBrandLogo } from './watermark';
 
 export const CARD_W = 1080;
@@ -38,6 +39,8 @@ export interface CardOptions {
   title: string;
   /** 표시 이름(선택) */
   handle?: string;
+  /** 챌린지 결과면 제목 자리에 챌린지 이름, 워터마크에 "나도 도전하기" 링크 */
+  challenge?: ChallengeInfo;
 }
 
 export function drawResultCard(canvas: HTMLCanvasElement, result: AnalysisResult, opts: CardOptions) {
@@ -68,12 +71,13 @@ export function drawResultCard(canvas: HTMLCanvasElement, result: AnalysisResult
   ctx.fill();
   ctx.fillStyle = '#fff';
   ctx.font = `900 38px ${FONT_BODY}`;
-  ctx.fillText('AI한테 내 춤 채점 맡겨봄', CARD_W / 2, 172);
+  ctx.fillText(opts.challenge ? 'AI 안무 챌린지 도전!' : 'AI한테 내 춤 채점 맡겨봄', CARD_W / 2, 172);
 
-  // 곡 제목
+  // 곡 제목 (챌린지면 챌린지 이름)
+  const heading = opts.challenge ? `${opts.challenge.title} 챌린지` : opts.title || '제목 없는 안무';
   ctx.fillStyle = '#fff';
-  fitText(ctx, opts.title || '제목 없는 안무', CARD_W - 140, 72, '900', FONT_BODY);
-  ctx.fillText(opts.title || '제목 없는 안무', CARD_W / 2, 300);
+  fitText(ctx, heading, CARD_W - 140, 72, '900', FONT_BODY);
+  ctx.fillText(heading, CARD_W / 2, 300);
   ctx.fillStyle = '#9a98b0';
   ctx.font = `700 34px ${FONT_BODY}`;
   ctx.fillText(`${formatDate(result.createdAt)}${opts.handle ? `  ·  ${opts.handle}` : ''}`, CARD_W / 2, 352);
@@ -170,7 +174,7 @@ export function drawResultCard(canvas: HTMLCanvasElement, result: AnalysisResult
   ctx.textAlign = 'center';
 
   // 워터마크: 하단 15% 안전 영역 바로 위 (항상 표시)
-  drawWatermark(ctx, CARD_W, CARD_H);
+  drawWatermark(ctx, CARD_W, CARD_H, opts.challenge?.id);
 }
 
 export function canvasToBlob(canvas: HTMLCanvasElement, type = 'image/png'): Promise<Blob> {

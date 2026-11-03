@@ -1007,3 +1007,98 @@ h3 small {
     animation-duration: 0.01s !important;
   }
 }
+
+/* ---------- 챌린지 ---------- */
+a.btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.challenge-head {
+  text-align: center;
+  padding: 16px 20px;
+}
+.challenge-head h2 {
+  font-size: clamp(26px, 6vw, 38px);
+  margin: 4px 0;
+}
+.challenge-tag {
+  display: inline-block;
+  background: var(--pink);
+  color: #fff;
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  border-radius: 999px;
+  padding: 2px 12px;
+}
+.yt-box {
+  position: absolute;
+  inset: 0;
+}
+.yt-box > div,
+.yt-box iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.guide-canvas {
+  background: #14141f;
+}
+.live-countdown.passive {
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.2);
+}
+.center-text {
+  text-align: center;
+}
+
+/* ---------- 관리자 ---------- */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+.form-grid .field input {
+  font-size: 17px;
+}
+.yt-preview {
+  margin-top: 14px;
+}
+.yt-preview iframe {
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 14px;
+  display: block;
+}
+.problems {
+  color: var(--gold);
+  font-size: 14px;
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+.admin-preview {
+  width: 90px;
+  height: 160px;
+  border-radius: 10px;
+  margin-top: 10px;
+}
+.admin-output {
+  margin-top: 16px;
+  background: var(--bg);
+  border-radius: 16px;
+  padding: 16px;
+}
+.steps {
+  color: var(--muted);
+  font-size: 14px;
+  padding-left: 20px;
+}
+code {
+  background: var(--panel-2);
+  border-radius: 6px;
+  padding: 1px 6px;
+  font-size: 0.92em;
+}

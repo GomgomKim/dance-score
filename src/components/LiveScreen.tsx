@@ -2,18 +2,15 @@
  * 라이브 모드: 원본 재생 + 웹캠. 8카운트가 끝날 때마다 실시간으로 등급 팝업.
  */
 import { useEffect, useRef, useState } from 'react';
-import { countdownBeep, popup } from '../audio/sfx';
-import { drawSkeleton, type Rect } from '../pose/draw';
-import { GRADE_COLORS } from '../pose/grading';
 import { createPoseDetector, type PoseDetector } from '../pose/landmarker';
 import { mirrorPose } from '../pose/landmarks';
-import { analyzeSequences } from '../pose/scoring';
-import { beatDuration, countAt, splitEightCounts } from '../pose/segments';
-import { resampleFrames } from '../pose/sequence';
-import type { Grade, PoseFrame, Segment, SegmentResult } from '../pose/types';
+import { countAt } from '../pose/segments';
+import type { SegmentResult } from '../pose/types';
 import { startRecording, type Recording } from '../lib/recorder';
 import type { SetupState } from '../lib/setup';
 import type { ScoreSession } from '../lib/session';
+import { LiveScorer } from '../live/liveScorer';
+import { cameraErrorMessage, CountDots, drawPoseOverlay, openWebcam, PopupStack, runCountdown, usePopups } from '../live/ui';
 
 interface Props {
   setup: SetupState;
@@ -23,39 +20,7 @@ interface Props {
   debug: boolean;
 }
 
-const LIVE_FPS = 15;
-
 type Phase = 'loading' | 'ready' | 'countdown' | 'playing' | 'finishing' | 'error';
-
-interface Popup {
-  id: number;
-  grade: Grade;
-  score: number;
-  combo: number;
-  comment: string;
-}
-
-function overlay(canvas: HTMLCanvasElement | null, video: HTMLVideoElement, pose: PoseFrame['pose'], color: string) {
-  if (!canvas) return;
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
-  if (canvas.width !== w || canvas.height !== h) {
-    canvas.width = w;
-    canvas.height = h;
-  }
-  const ctx = canvas.getContext('2d')!;
-  ctx.clearRect(0, 0, w, h);
-  if (!pose || !video.videoWidth) return;
-  // <video>는 object-fit: contain
-  const scale = Math.min(w / video.videoWidth, h / video.videoHeight);
-  const rect: Rect = {
-    w: video.videoWidth * scale,
-    h: video.videoHeight * scale,
-    x: (w - video.videoWidth * scale) / 2,
-    y: (h - video.videoHeight * scale) / 2,
-  };
-  drawSkeleton(ctx, pose, rect, { color });
-}
 
 export function LiveScreen({ setup, refUrl, onDone, onCancel, debug }: Props) {
   const refVideo = useRef<HTMLVideoElement>(null);
@@ -66,23 +31,16 @@ export function LiveScreen({ setup, refUrl, onDone, onCancel, debug }: Props) {
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(0);
   const [count, setCount] = useState<{ segment: number; count: number } | null>(null);
-  const [popups, setPopups] = useState<Popup[]>([]);
   const [results, setResults] = useState<SegmentResult[]>([]);
   const [showSkeleton, setShowSkeleton] = useState(true);
   const [fpsInfo, setFpsInfo] = useState(0);
+  const { popups, show } = usePopups();
 
   const detectors = useRef<{ ref: PoseDetector; cam: PoseDetector } | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const recorder = useRef<Recording | null>(null);
   const recStartRefTime = useRef(0);
-  const refFrames = useRef<PoseFrame[]>([]);
-  const userFrames = useRef<PoseFrame[]>([]);
-  const segments = useRef<Segment[]>([]);
-  const nextSeg = useRef(0);
-  const combo = useRef(0);
-  const popupId = useRef(0);
-  const camAspect = useRef(16 / 9);
-  const refAspect = useRef(9 / 16);
+  const scorer = useRef<LiveScorer | null>(null);
   const showSkeletonRef = useRef(showSkeleton);
   showSkeletonRef.current = showSkeleton;
 
@@ -94,10 +52,7 @@ export function LiveScreen({ setup, refUrl, onDone, onCancel, debug }: Props) {
         const [ref, cam, media] = await Promise.all([
           createPoseDetector(setup.model),
           createPoseDetector(setup.model),
-          navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-            audio: false,
-          }),
+          openWebcam(),
         ]);
         if (cancelled) {
           ref.close();
@@ -110,15 +65,10 @@ export function LiveScreen({ setup, refUrl, onDone, onCancel, debug }: Props) {
         const v = camVideo.current!;
         v.srcObject = media;
         await v.play();
-        camAspect.current = v.videoWidth / Math.max(1, v.videoHeight);
         setPhase('ready');
       } catch (e) {
         console.error(e);
-        setError(
-          (e as Error).name === 'NotAllowedError'
-            ? '웹캠 권한이 필요해요. 브라우저 주소창에서 카메라를 허용해주세요.'
-            : `준비 중 오류: ${(e as Error).message}`,
-        );
+        setError(cameraErrorMessage(e));
         setPhase('error');
       }
     })();
@@ -140,7 +90,7 @@ export function LiveScreen({ setup, refUrl, onDone, onCancel, debug }: Props) {
       const v = camVideo.current;
       if (d && v && v.readyState >= 2) {
         const pose = d.cam.detect(v);
-        overlay(camCanvas.current, v, showSkeletonRef.current ? pose : null, '#ff3d81');
+        drawPoseOverlay(camCanvas.current, v.videoWidth, v.videoHeight, showSkeletonRef.current ? pose : null, '#ff3d81');
       }
       raf = requestAnimationFrame(loop);
     };
@@ -148,41 +98,20 @@ export function LiveScreen({ setup, refUrl, onDone, onCancel, debug }: Props) {
     return () => cancelAnimationFrame(raf);
   }, [phase]);
 
-  function scoreSegment(seg: Segment) {
-    const beat = beatDuration(setup.bpm);
-    const t0 = Math.max(0, seg.start - beat);
-    const t1 = seg.end + beat * 0.5;
-    const ref = resampleFrames(refFrames.current, LIVE_FPS, t0, t1, refAspect.current);
-    const user = resampleFrames(userFrames.current, LIVE_FPS, t0, t1, camAspect.current);
-    const r = analyzeSequences(ref, user, { bpm: setup.bpm, offset: setup.offset, segments: [seg] });
-    const sr = r.segments[0];
-    if (!sr) return;
-    combo.current = sr.grade === 'PERFECT' || sr.grade === 'GREAT' ? combo.current + 1 : 0;
-    popup(sr.grade);
-    const id = ++popupId.current;
-    setPopups((p) => [...p.slice(-2), { id, grade: sr.grade, score: sr.score, combo: combo.current, comment: sr.comment }]);
-    setTimeout(() => setPopups((p) => p.filter((x) => x.id !== id)), 1600);
-    setResults((rs) => [...rs, sr]);
-  }
-
   async function start() {
     const rv = refVideo.current!;
+    const cv = camVideo.current!;
     rv.currentTime = 0;
-    refAspect.current = rv.videoWidth / Math.max(1, rv.videoHeight);
-    segments.current = splitEightCounts({ bpm: setup.bpm, offset: setup.offset, duration: rv.duration });
-    nextSeg.current = 0;
-    refFrames.current = [];
-    userFrames.current = [];
-    combo.current = 0;
+    scorer.current = new LiveScorer({
+      bpm: setup.bpm,
+      offset: setup.offset,
+      duration: rv.duration,
+      refAspect: rv.videoWidth / Math.max(1, rv.videoHeight),
+      userAspect: cv.videoWidth / Math.max(1, cv.videoHeight),
+    });
     setResults([]);
     setPhase('countdown');
-    for (let i = 3; i >= 1; i--) {
-      setCountdown(i);
-      countdownBeep();
-      await new Promise((r) => setTimeout(r, 800));
-    }
-    setCountdown(0);
-    countdownBeep(true);
+    await runCountdown(setCountdown);
     // 웹캠 녹화 (결과 화면에서 다시 보기용)
     if (stream.current && typeof MediaRecorder !== 'undefined') {
       try {
@@ -206,19 +135,21 @@ export function LiveScreen({ setup, refUrl, onDone, onCancel, debug }: Props) {
     let fpsT = performance.now();
     const loop = () => {
       const d = detectors.current;
+      const s = scorer.current;
       const rv = refVideo.current!;
       const cv = camVideo.current!;
-      if (!d) return;
+      if (!d || !s) return;
       const t = rv.currentTime;
       if (t !== lastRefT) {
         lastRefT = t;
         let refPose = d.ref.detect(rv);
         if (refPose && setup.mirror) refPose = mirrorPose(refPose);
         const camPose = d.cam.detect(cv);
-        refFrames.current.push({ t, pose: refPose });
-        userFrames.current.push({ t, pose: camPose });
-        overlay(refCanvas.current, rv, showSkeletonRef.current ? refPose : null, '#3ddcff');
-        overlay(camCanvas.current, cv, showSkeletonRef.current ? camPose : null, '#ff3d81');
+        s.addRef(t, refPose);
+        s.addUser(t, camPose);
+        const sk = showSkeletonRef.current;
+        drawPoseOverlay(refCanvas.current, rv.videoWidth, rv.videoHeight, sk ? refPose : null, '#3ddcff');
+        drawPoseOverlay(camCanvas.current, cv.videoWidth, cv.videoHeight, sk ? camPose : null, '#ff3d81');
         frames++;
       }
       const now = performance.now();
@@ -228,11 +159,9 @@ export function LiveScreen({ setup, refUrl, onDone, onCancel, debug }: Props) {
         fpsT = now;
       }
       setCount(countAt(t, setup.bpm, setup.offset));
-      const beat = beatDuration(setup.bpm);
-      const seg = segments.current[nextSeg.current];
-      if (seg && t >= seg.end + beat * 0.5) {
-        nextSeg.current++;
-        scoreSegment(seg);
+      for (const sr of s.poll(t)) {
+        show(sr, s.combo);
+        setResults((rs) => [...rs, sr]);
       }
       if (rv.ended) {
         void finish();
@@ -247,23 +176,15 @@ export function LiveScreen({ setup, refUrl, onDone, onCancel, debug }: Props) {
 
   const finishing = useRef(false);
   async function finish() {
-    if (finishing.current) return;
+    const s = scorer.current;
+    if (finishing.current || !s) return;
     finishing.current = true;
     setPhase('finishing');
     const rv = refVideo.current!;
     rv.pause();
-    // 아직 채점 안 된 마지막 구간
-    while (nextSeg.current < segments.current.length && segments.current[nextSeg.current].end <= rv.currentTime + 0.01) {
-      scoreSegment(segments.current[nextSeg.current++]);
-    }
     const end = rv.currentTime;
-    const ref = resampleFrames(refFrames.current, LIVE_FPS, 0, end, refAspect.current);
-    const user = resampleFrames(userFrames.current, LIVE_FPS, 0, end, camAspect.current);
-    const result = analyzeSequences(ref, user, {
-      bpm: setup.bpm,
-      offset: setup.offset,
-      segments: segments.current.filter((s) => s.end <= end + 0.01),
-    });
+    s.flush(end);
+    const { result, ref, user } = s.finalize(end);
     let userUrl: string | undefined;
     if (recorder.current) {
       const blob = await recorder.current.stop();
@@ -305,25 +226,9 @@ export function LiveScreen({ setup, refUrl, onDone, onCancel, debug }: Props) {
           <span className="pane-label user">나</span>
         </div>
 
-        {count && phase === 'playing' && (
-          <div className="live-count">
-            {Array.from({ length: 8 }, (_, i) => (
-              <span key={i} className={i + 1 === count.count ? 'on' : ''}>
-                {i + 1}
-              </span>
-            ))}
-          </div>
-        )}
+        {count && phase === 'playing' && <CountDots count={count.count} />}
         {countdown > 0 && <div className="live-countdown">{countdown}</div>}
-        <div className="popups">
-          {popups.map((p) => (
-            <div key={p.id} className={`popup grade-${p.grade.toLowerCase()}`} style={{ color: GRADE_COLORS[p.grade] }}>
-              <div className="popup-grade">{p.grade}</div>
-              {p.combo > 1 && <div className="popup-combo">{p.combo} COMBO</div>}
-              <div className="popup-comment">{p.comment}</div>
-            </div>
-          ))}
-        </div>
+        <PopupStack popups={popups} />
         {phase === 'loading' && <div className="live-msg">모델과 웹캠 준비 중…</div>}
         {phase === 'finishing' && <div className="live-msg">결과 계산 중…</div>}
         {phase === 'error' && <div className="live-msg error">{error}</div>}
@@ -348,7 +253,7 @@ export function LiveScreen({ setup, refUrl, onDone, onCancel, debug }: Props) {
         </label>
         {debug && (
           <span className="hint debug">
-            {fpsInfo}fps · 채점 {results.length}/{segments.current.length || '-'}
+            {fpsInfo}fps · 채점 {results.length}/{scorer.current?.segments.length || '-'}
             {latest ? ` · 마지막 ${latest.score}점` : ''}
           </span>
         )}

@@ -14,5 +14,12 @@ export interface ScoreSession {
   mirror: boolean;
   /** 내 영상이 웹캠 녹화본이면 true (seek 우회 필요) */
   liveRecording?: boolean;
-  source: 'analysis' | 'live' | 'demo';
+  source: 'analysis' | 'live' | 'demo' | 'challenge';
+  /** 챌린지 결과면 챌린지 정보 (결과 카드/영상에 이름과 "나도 도전하기" 링크) */
+  challenge?: ChallengeInfo;
+}
+
+export interface ChallengeInfo {
+  id: string;
+  title: string;
 }
